@@ -1,0 +1,75 @@
+name: pg-perf-lab
+
+services:
+  db:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: pg-perf-lab/postgres:17
+    container_name: pg-perf-lab-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: lab
+      POSTGRES_PASSWORD: lab
+      # The app's own state DB. lab_data (the playground) is created by initdb/01.
+      POSTGRES_DB: lab_meta
+      # Deterministic collation -- text index behaviour should not depend on the host.
+      POSTGRES_INITDB_ARGS: "--locale=C --encoding=UTF8"
+    ports:
+      # Host 5433, because the native postgresql-x64-17 service already owns 5432.
+      # 127.0.0.1 only: this container is a superuser sandbox with a trivial password.
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    # Parallel query needs more than Docker's default 64MB /dev/shm.
+    shm_size: 1gb
+    command:
+      - postgres
+      # -- extensions ---------------------------------------------------------
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - pg_stat_statements.track=all
+      - -c
+      - pg_stat_statements.max=10000
+      # -- memory -------------------------------------------------------------
+      # Deliberately smaller than the 10M-row dataset (~1.5GB) so that
+      # shared_blks_hit vs shared_blks_read actually moves. Do not "tune" this up.
+      - -c
+      - shared_buffers=1GB
+      - -c
+      - effective_cache_size=4GB
+      # Stock default, on purpose: sorts must be able to spill to disk, that is
+      # exercise material (F2 'external merge' warning).
+      - -c
+      - work_mem=4MB
+      - -c
+      - maintenance_work_mem=512MB
+      # -- write path ---------------------------------------------------------
+      # Large enough that a 10M-row COPY does not trigger a checkpoint storm.
+      - -c
+      - max_wal_size=4GB
+      - -c
+      - min_wal_size=1GB
+      - -c
+      - checkpoint_timeout=15min
+      # -- observability ------------------------------------------------------
+      - -c
+      - track_io_timing=on
+      - -c
+      - track_functions=all
+      # -- planner ------------------------------------------------------------
+      # random_page_cost and default_statistics_target stay at their defaults;
+      # several exercises exist precisely to change them at runtime.
+      - -c
+      - max_parallel_workers_per_gather=2
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lab -d lab_meta"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+volumes:
+  pgdata:

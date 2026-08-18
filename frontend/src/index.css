@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+:root {
+  /* One knob for overall UI size. 1 = Tailwind's stock 16px baseline.
+     Every Tailwind spacing and text utility is rem-based, so this scales the
+     whole interface. Two things do NOT follow it and must be kept in step by
+     hand: the SVG geometry in plan/PlanTree.tsx (see its S constant), and any
+     literal px value in a class. */
+  --ui-scale: 1.5;
+  font-size: calc(16px * var(--ui-scale));
+}
+
+@theme {
+  --font-mono: "Cascadia Code", "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-slate-950 text-slate-200 antialiased;
+}
+
+/* CodeMirror sizes itself from its container, and @uiw wraps it in one more
+   div -- both need the height or the editor floats at the top of its box. */
+.editor-shell > div,
+.cm-editor {
+  height: 100%;
+}
+.cm-scroller {
+  font-family: var(--font-mono);
+  /* rem, not px, so the editor grows with --ui-scale like everything else. */
+  font-size: 0.8125rem;
+}

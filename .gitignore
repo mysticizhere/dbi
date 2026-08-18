@@ -1,0 +1,23 @@
+# python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# node
+node_modules/
+dist/
+.vite/
+
+# local overrides
+.env
+*.local
+
+# scratch
+*.bak
+
+# build artifacts
+*.tsbuildinfo

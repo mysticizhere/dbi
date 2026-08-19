@@ -38,6 +38,11 @@ class RunRequest(BaseModel):
     # in sandbox mode, SET otherwise.
     settings_overrides: dict[str, str] = Field(default_factory=dict)
 
+    # Set by the exercise grader, not the workbench UI: a reference query whose
+    # result set the target must match. Compared inside the same transaction, so
+    # an index the submission created is visible to both sides of the check.
+    compare_sql: str | None = None
+
 
 class Timings(BaseModel):
     """Per-repetition timings, in milliseconds."""
@@ -93,3 +98,7 @@ class RunResponse(BaseModel):
     notices: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     error: RunError | None = None
+
+    # Result of the compare_sql check. None when no comparison was requested.
+    rows_match: bool | None = None
+    rows_match_error: str | None = None

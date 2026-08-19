@@ -118,8 +118,12 @@ switch ($Task) {
         if ($LASTEXITCODE -ne 0) { throw "could not recreate lab_data" }
 
         Write-Step 'reinstalling extensions'
-        docker exec -i $Container psql -U lab -d lab_data -v ON_ERROR_STOP=1 -f - `
-            < (Join-Path $Root 'docker\initdb\02-extensions.sql')
+        # PowerShell has no '<' input redirection operator -- and because that
+        # is a *parse* error it broke every verb in this script, not just reset.
+        # Pipe the file in instead.
+        Get-Content (Join-Path $Root 'docker\initdb\02-extensions.sql') -Raw |
+            docker exec -i $Container psql -U lab -d lab_data -v ON_ERROR_STOP=1 -f -
+        if ($LASTEXITCODE -ne 0) { throw 'could not reinstall extensions' }
 
         $script:Force = $true
         Invoke-Seed

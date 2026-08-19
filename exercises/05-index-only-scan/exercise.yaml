@@ -1,0 +1,33 @@
+id: index-only-scan
+title: The index-only scan that still reads the heap
+layer: 3
+difficulty: 2
+requires_persist: true
+
+prompt: |
+  The plan below already says **Index Only Scan** — the good one. And yet it
+  reports thousands of **Heap Fetches**, which is precisely the work an
+  index-only scan is supposed to avoid.
+
+  **Your job:** get `Heap Fetches` to 0.
+
+  > **Sandbox must be OFF for this one.** The fix is a command Postgres refuses
+  > to run inside a transaction block, and sandbox mode wraps everything in
+  > `BEGIN .. ROLLBACK`. Untick Sandbox before you run.
+
+starting_query: |
+  SELECT count(*) FROM events WHERE score < 20000;
+
+hints:
+  - "An index entry knows the value and where the row lives. It does not know whether that row is still visible to your transaction -- MVCC means a row can be dead, or newer than your snapshot."
+  - "Postgres keeps a visibility map: one bit per heap page saying 'every row on this page is visible to everyone'. If the bit is set, the scan can trust the index and skip the heap."
+  - "Something in this exercise's setup wrote to 300,000 rows, which cleared those bits. The command that recomputes them is VACUUM."
+
+assertions:
+  - type: has_node
+    node_type: Index Only Scan
+    relation: events
+    because: "The plan shape was already right; this assertion just guards against 'fixing' it by changing the query."
+  - type: heap_fetches_max
+    value: 0
+    because: "Zero heap fetches means the visibility map is current and the index alone answered the query."

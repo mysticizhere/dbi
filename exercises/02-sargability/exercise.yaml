@@ -1,0 +1,36 @@
+id: sargability
+title: Sargability and the function that kills an index
+layer: 3
+difficulty: 2
+
+prompt: |
+  `events.email` has an index on it: **`idx_events_email (email)`**. The emails
+  are stored with mixed capitalisation, so lookups normalise with `lower()`.
+
+  The query below finds exactly one row out of ten million — and reads the
+  entire table to do it.
+
+  **Your job:** make this lookup use an index, without changing the predicate's
+  meaning.
+
+  The term for a predicate an index can actually serve is *sargable* — Search
+  ARGument ABLE.
+
+starting_query: |
+  SELECT id, city FROM events WHERE lower(email) = 'known.user@example.com';
+
+hints:
+  - "The index stores `email` exactly as written. The query asks about `lower(email)`. Those are different values, and the planner knows it."
+  - "You cannot use an index on a column when the predicate wraps that column in a function -- unless the index stores the function's result."
+  - "Postgres supports indexes on expressions: `CREATE INDEX ... ON events (lower(email));`"
+
+assertions:
+  - type: no_node
+    node_type: Seq Scan
+    relation: events
+    because: "Reading 1.5 GB to return one row is the whole problem."
+  - type: max_total_blocks
+    value: 1000
+    because: "A matching expression index answers this in single-digit blocks. The seq scan takes ~194,000."
+  - type: returns_same_rows_as_solution
+    because: "The fix must not change the answer -- an index that returns different rows is not an optimisation."

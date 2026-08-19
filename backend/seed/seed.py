@@ -205,8 +205,11 @@ async def seed(scale: str, force: bool, seed_value: int) -> int:
         await conn.execute("ALTER TABLE events ADD CONSTRAINT events_pkey PRIMARY KEY (id)")
         print(f"  primary key built in {time.perf_counter() - pk_started:.1f}s")
 
-        print("  ANALYZE...")
-        await conn.execute("ANALYZE events")
+        # VACUUM, not just ANALYZE. Without it the visibility map is unset, every
+        # index-only scan pays a heap fetch per row, and exercise 5 -- which is
+        # *about* a stale visibility map -- has no clean baseline to start from.
+        print("  VACUUM ANALYZE...")
+        await conn.execute("VACUUM ANALYZE events")
 
         relations = await _relation_stats(conn)
         for r in relations:

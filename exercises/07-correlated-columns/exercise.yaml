@@ -1,0 +1,36 @@
+id: correlated-columns
+title: Correlated columns and the independence assumption
+layer: 4
+difficulty: 3
+
+prompt: |
+  In this dataset every city has exactly one pincode — `city` and `pincode` are
+  perfectly correlated, the way a real address hierarchy is.
+
+  The planner does not know that. It knows the selectivity of each column
+  separately and multiplies them, because it assumes columns are independent.
+
+  Run the query and compare **Plan Rows** to **Actual Rows** on the scan node.
+  Switch the plan view to **Estimate error** to see it in colour.
+
+  **Your job:** get the worst estimate error in the plan under 3x, without
+  changing the query's meaning.
+
+  Note that a wrong row estimate does not always produce a wrong plan — here the
+  seq scan is fine either way. It matters because *every* node above a bad
+  estimate is costed on a fiction, and in a join that is how you get a nested
+  loop over a million rows.
+
+starting_query: |
+  SELECT count(*) FROM events
+  WHERE city = 'Mumbai North' AND pincode = 400038;
+
+hints:
+  - "200 cities and 200 pincodes. The planner estimates p(city) x p(pincode) = 1/200 x 1/200 = 1/40,000. The truth is 1/200, because the second condition adds no information once you know the first."
+  - "Postgres can be taught about a correlation. Look up CREATE STATISTICS, and in particular the `dependencies` and `ndistinct` kinds."
+  - "Extended statistics have to be populated before they do anything: `CREATE STATISTICS ...` then `ANALYZE events;`. Both work inside the sandbox transaction."
+
+assertions:
+  - type: max_estimate_error
+    value: 3.0
+    because: "Without extended statistics the scan estimate is off by about 160x. With them it lands within about 1.3x."

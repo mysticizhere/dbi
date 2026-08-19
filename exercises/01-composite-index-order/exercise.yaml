@@ -1,0 +1,36 @@
+id: composite-index-order
+title: Composite index column order
+layer: 3
+difficulty: 1
+
+prompt: |
+  There is already an index on `events`: **`idx_events_city_score (city, score)`**.
+
+  The query below filters on `score` alone. Run it and look at the plan: despite
+  a perfectly good index *containing* `score`, the planner sequentially scans
+  1.5 GB of table.
+
+  **Your job:** make this query stop scanning the whole table.
+
+  Think about what a B+tree is actually sorted by before you reach for a fix.
+
+starting_query: |
+  SELECT count(*) FROM events WHERE score < 2000;
+
+hints:
+  - "A composite index is sorted by its first column, then its second. Ask yourself where the rows with score < 2000 physically sit inside idx_events_city_score."
+  - "The index is sorted by city first. Rows with a low score are scattered across all 200 cities, so there is no contiguous range to seek to."
+  - "Sandbox mode is on: CREATE INDEX here is free and vanishes when the run ends. Try `CREATE INDEX idx_events_score ON events (score);` before the SELECT."
+
+assertions:
+  - type: no_node
+    node_type: Seq Scan
+    relation: events
+    because: "A full scan of a 1.5 GB table to find 0.2% of its rows is the thing we are removing."
+  - type: has_node
+    node_type: Index Only Scan
+    relation: events
+    because: "count(*) needs only the score column, so a well-chosen index answers it without touching the heap at all."
+  - type: max_total_blocks
+    value: 30000
+    because: "The seq scan touches ~194,000 blocks. An index on (score) touches ~10,000."

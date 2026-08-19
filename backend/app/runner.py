@@ -190,6 +190,39 @@ async def _relation_pages(
     return {str(r["relname"]): int(cast(int, r["relpages"])) for r in rows}
 
 
+async def _compare_rows(
+    conn: AsyncConnection[Any], target: str, reference: str
+) -> tuple[bool | None, str | None]:
+    """Do two queries return the same multiset of rows?
+
+    Symmetric difference in SQL rather than fetching both sides into Python: the
+    result sets are potentially huge, and `EXCEPT ALL` both ways also respects
+    duplicate counts, which a set comparison would quietly ignore. Row *order*
+    is deliberately not compared -- only an ORDER BY makes it meaningful, and an
+    exercise that cares should assert on the plan instead.
+    """
+    check = f"""
+        SELECT count(*) AS diff FROM (
+            (SELECT * FROM ({target}) AS _submitted
+             EXCEPT ALL
+             SELECT * FROM ({reference}) AS _reference)
+            UNION ALL
+            (SELECT * FROM ({reference}) AS _reference
+             EXCEPT ALL
+             SELECT * FROM ({target}) AS _submitted)
+        ) AS _diff
+    """
+    try:
+        async with conn.cursor() as cur:
+            await cur.execute(check)
+            row = await cur.fetchone()
+    except psycopg.Error as exc:
+        # Mismatched column lists are the usual cause, and that is itself a
+        # meaningful answer -- so report why rather than swallowing it.
+        return None, (exc.diag.message_primary or str(exc)).strip()
+    return (int(row["diff"]) == 0 if row else None), None
+
+
 async def run_query(req: RunRequest) -> RunResponse:
     statements = split_statements(req.sql)
     rejected = _precheck(req, statements)
@@ -305,6 +338,15 @@ async def run_query(req: RunRequest) -> RunResponse:
                     "machine-independent metric -- need Analyze mode."
                 )
 
+            rows_match: bool | None = None
+            rows_match_error: str | None = None
+            if req.compare_sql:
+                # Still inside the transaction, so an index the submission
+                # created is visible to both sides of the comparison.
+                rows_match, rows_match_error = await _compare_rows(
+                    conn, target, req.compare_sql
+                )
+
             analyzed_plan = None
             if plan is not None:
                 # Inside the sandbox transaction on purpose: an index created by
@@ -333,6 +375,8 @@ async def run_query(req: RunRequest) -> RunResponse:
                 buffers=buffers,
                 notices=notices,
                 warnings=warnings,
+                rows_match=rows_match,
+                rows_match_error=rows_match_error,
             )
 
         except psycopg.Error as exc:

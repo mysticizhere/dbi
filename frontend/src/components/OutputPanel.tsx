@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { RunResponse } from "../api";
 import PlanView from "../plan/PlanView";
+import GradePanel from "../exercises/GradePanel";
+import type { GradeResult } from "../exercises/api";
 
-type Tab = "plan" | "json" | "rows" | "messages";
+type Tab = "grade" | "plan" | "json" | "rows" | "messages";
 
 function ResultTable({ result }: { result: NonNullable<RunResponse["result"]> }) {
   if (result.columns.length === 0) {
@@ -52,11 +54,18 @@ function ResultTable({ result }: { result: NonNullable<RunResponse["result"]> })
 export default function OutputPanel({
   response,
   pending,
+  grade = null,
 }: {
   response: RunResponse | null;
   pending: boolean;
+  grade?: GradeResult | null;
 }) {
   const [tab, setTab] = useState<Tab>("plan");
+
+  // A fresh grade is the thing you just asked for, so it takes the view.
+  useEffect(() => {
+    if (grade) setTab("grade");
+  }, [grade]);
 
   if (pending) {
     return (
@@ -78,6 +87,15 @@ export default function OutputPanel({
     response.notices.length + response.warnings.length + (response.error ? 1 : 0);
 
   const tabs: { id: Tab; label: string; badge?: number }[] = [
+    ...(grade
+      ? [
+          {
+            id: "grade" as Tab,
+            label: grade.passed ? "Grade ✓" : "Grade",
+            badge: grade.results.filter((r) => !r.passed).length || undefined,
+          },
+        ]
+      : []),
     { id: "plan", label: "Plan", badge: response.analyzed_plan?.warnings.length || undefined },
     { id: "json", label: "JSON" },
     { id: "rows", label: "Rows", badge: response.result?.row_count },
@@ -108,6 +126,8 @@ export default function OutputPanel({
       </div>
 
       <div className={`min-h-0 flex-1 ${tab === "plan" ? "overflow-hidden" : "overflow-auto"}`}>
+        {tab === "grade" && grade && <GradePanel grade={grade} />}
+
         {tab === "plan" &&
           (response.analyzed_plan ? (
             <PlanView plan={response.analyzed_plan} />

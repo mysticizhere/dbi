@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.db import apply_meta_schema, close_pools, open_pools
-from app.routers import workbench
+from app.routers import exercises, workbench
 
 log = logging.getLogger("perflab")
 
@@ -47,6 +47,7 @@ app.add_middleware(
 )
 
 app.include_router(workbench.router, prefix="/api")
+app.include_router(exercises.router, prefix="/api")
 
 
 @app.get("/")
